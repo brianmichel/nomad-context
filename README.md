@@ -39,7 +39,11 @@ Set the `NOMAD_CONTEXT_NOMAD_PATH` environment variable if `nomad` is not on you
 ## Development
 
 ```bash
-mise exec -- go test ./...
+# Compile the CLI
+mise run build
+
+# Run the Go tests
+mise run test
 ```
 
-Set `GOCACHE=$(pwd)/.gocache` when running tests if your environment restricts writes to the default Go build cache directory.
+Set `GOCACHE=$(pwd)/.gocache` before running the commands above if your environment restricts writes to the default Go build cache directory.
