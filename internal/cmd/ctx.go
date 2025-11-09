@@ -4,14 +4,20 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/brianmichel/nomad-context/internal/config"
 	"github.com/brianmichel/nomad-context/internal/contexts"
 )
+
+const activeIndicator = "*"
 
 func newCtxCommand(mgr *contexts.Manager) *cobra.Command {
 	ctxCmd := &cobra.Command{
@@ -46,16 +52,53 @@ func newCtxListCommand(mgr *contexts.Manager) *cobra.Command {
 				return nil
 			}
 
-			for _, ctx := range contextsList {
-				indicator := " "
-				if ctx.Name == current {
-					indicator = "*"
-				}
-				fmt.Fprintf(out, "%s %s\t%s\n", indicator, ctx.Name, ctx.Address)
-			}
+			renderContextTable(out, contextsList, current)
 			return nil
 		},
 	}
+}
+
+func renderContextTable(out io.Writer, contexts []*config.Context, current string) {
+	tw := table.NewWriter()
+	tw.SetOutputMirror(out)
+	tw.SetStyle(table.StyleRounded)
+	tw.AppendHeader(table.Row{"CURRENT", "NAME", "ADDRESS"})
+
+	useColor := shouldUseColor(out)
+	if useColor {
+		tw.SetRowPainter(func(row table.Row) text.Colors {
+			if len(row) == 0 {
+				return nil
+			}
+			if flag, ok := row[0].(string); ok && flag == activeIndicator {
+				return text.Colors{text.FgHiGreen}
+			}
+			return nil
+		})
+	}
+
+	for _, ctx := range contexts {
+		currentIndicator := ""
+		if ctx.Name == current {
+			currentIndicator = activeIndicator
+		}
+
+		tw.AppendRow(table.Row{currentIndicator, ctx.Name, ctx.Address})
+	}
+
+	tw.Render()
+}
+
+func shouldUseColor(out io.Writer) bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+
+	if f, ok := out.(*os.File); ok {
+		return term.IsTerminal(int(f.Fd()))
+	}
+
+	return false
 }
 
 func newCtxSetCommand(mgr *contexts.Manager) *cobra.Command {
