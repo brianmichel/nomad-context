@@ -7,4 +7,4 @@ run = "go build ./cmd/nomad-context"
 
 [tasks.test]
 description = "Run the Go test suite"
-run = "go test ./..."
+run = "go test ./... -v"
