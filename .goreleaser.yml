@@ -1,0 +1,45 @@
+version: 2
+
+project_name: nomad-context
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: nomad-context
+    main: ./cmd/nomad-context
+    binary: nomad-context
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_checksums.txt"
+  split: true
+
+changelog:
+  use: git
+
+release:
+  github:
+    owner: brianmichel
+    name: nomad-context

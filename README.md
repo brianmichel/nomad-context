@@ -44,6 +44,19 @@ mise run build
 
 # Run the Go tests
 mise run test
+
+# Build release artifacts
+mise run release
+
 ```
 
 Set `GOCACHE=$(pwd)/.gocache` before running the commands above if your environment restricts writes to the default Go build cache directory.
+
+## Releasing
+
+Releases are driven by tags that match `v*`. To publish:
+
+1. Update `CHANGELOG`/docs as needed and tag the commit: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+2. The `Release` GitHub Actions workflow runs [GoReleaser](https://goreleaser.com) to build darwin, linux, and windows artifacts (amd64 + arm64) and attaches them to the GitHub release alongside checksums.
+
+To preview locally without publishing, install GoReleaser (`brew install goreleaser`, `scoop install goreleaser`, etc.) and run `mise run release`, which executes it in snapshot mode. On tag pushes, the `Release` GitHub Actions workflow builds all artifacts, creates the GitHub release, and uploads the tarballs/zips plus checksums automatically.
