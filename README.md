@@ -56,11 +56,12 @@ Set `GOCACHE=$(pwd)/.gocache` before running the commands above if your environm
 
 I currently use `mise` with the experimental github backend to install and use this tool with:
 
-```
+```bash
 mise use -g github:brianmichel/nomad-context@0.0.1
 ```
 
 In the near future I'm going to try to publish to:
+
 - Homebrew
 - Scoop
 

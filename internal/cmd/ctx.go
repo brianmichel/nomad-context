@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jedib0t/go-pretty/v6/list"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
@@ -87,6 +88,38 @@ func renderContextTable(out io.Writer, contexts []*config.Context, current strin
 	}
 
 	tw.Render()
+}
+
+func renderContextDetails(out io.Writer, ctx *config.Context, hasToken bool) {
+	listWriter := list.NewWriter()
+	listWriter.SetOutputMirror(out)
+	listWriter.SetStyle(list.StyleConnectedRounded)
+
+	listWriter.AppendItem(fmt.Sprintf("Context %q", ctx.Name))
+	listWriter.Indent()
+	listWriter.AppendItem(fmt.Sprintf("Address: %s", ctx.Address))
+	listWriter.AppendItem(fmt.Sprintf("Token stored: %s", formatTokenPresence(hasToken, shouldUseColor(out))))
+	listWriter.UnIndentAll()
+
+	listWriter.Render()
+}
+
+func formatTokenPresence(hasToken bool, useColor bool) string {
+	tokenStatus := "no"
+	if hasToken {
+		tokenStatus = "yes"
+	}
+
+	if !useColor {
+		return tokenStatus
+	}
+
+	colors := text.Colors{text.FgHiRed}
+	if hasToken {
+		colors = text.Colors{text.FgHiGreen}
+	}
+
+	return colors.Sprint(tokenStatus)
 }
 
 func shouldUseColor(out io.Writer) bool {
@@ -224,9 +257,7 @@ func newCtxShowCommand(mgr *contexts.Manager) *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "Name: %s\n", ctx.Name)
-			fmt.Fprintf(out, "Address: %s\n", ctx.Address)
-			fmt.Fprintf(out, "Token stored: %t\n", hasToken)
+			renderContextDetails(out, ctx, hasToken)
 			return nil
 		},
 	}
