@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,6 +45,46 @@ func TestRootProxiesUnknownFlagsAfterNestedNomadSubcommands(t *testing.T) {
 	assertRecordContains(t, recorded, "NOMAD_TOKEN=")
 }
 
+func TestRootProxiesLeadingNomadOptions(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "autocomplete install",
+			args: []string{"-autocomplete-install"},
+			want: "ARGS=-autocomplete-install",
+		},
+		{
+			name: "address before command",
+			args: []string{"-address=https://override.nomad.local:4646", "status"},
+			want: "ARGS=-address=https://override.nomad.local:4646|status",
+		},
+		{
+			name: "namespace before nested command",
+			args: []string{"-namespace=platform", "job", "status", "example"},
+			want: "ARGS=-namespace=platform|job|status|example",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recordPath := setupProxyTest(t, "")
+
+			root := NewRootCmd()
+			root.SetArgs(tt.args)
+
+			if err := root.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+
+			recorded := readRecord(t, recordPath)
+			assertRecordContains(t, recorded, tt.want)
+		})
+	}
+}
+
 func TestRootDoesNotIgnoreUnknownContextCommandFlags(t *testing.T) {
 	t.Setenv("NOMAD_CONTEXT_HOME", t.TempDir())
 	keyring.MockInit()
@@ -57,6 +98,51 @@ func TestRootDoesNotIgnoreUnknownContextCommandFlags(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown flag: --adrr") {
 		t.Fatalf("Execute() error = %v, want unknown flag error", err)
+	}
+}
+
+func TestRootKeepsLocalCommandsAndFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "help flag",
+			args: []string{"--help"},
+			want: "Manage Nomad CLI contexts or proxy commands to nomad",
+		},
+		{
+			name: "short help flag",
+			args: []string{"-h"},
+			want: "Manage Nomad CLI contexts or proxy commands to nomad",
+		},
+		{
+			name: "version flag",
+			args: []string{"--version"},
+			want: "nomad-context version ",
+		},
+		{
+			name: "version command",
+			args: []string{"version"},
+			want: "nomad-context version ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			root := NewRootCmd()
+			root.SetArgs(tt.args)
+			root.SetOut(&out)
+
+			if err := root.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if !strings.Contains(out.String(), tt.want) {
+				t.Fatalf("output missing %q:\n%s", tt.want, out.String())
+			}
+		})
 	}
 }
 
