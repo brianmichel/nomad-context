@@ -33,6 +33,7 @@ func NewRootCmd() *cobra.Command {
 
 	root.SetVersionTemplate("{{printf \"%s version %s\" .Name .Version}}\n")
 	root.Version = Version
+	root.Flags().SetInterspersed(false)
 
 	root.AddCommand(newCtxCommand(mgr))
 	root.AddCommand(newVersionCommand())
