@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -173,22 +174,31 @@ func setupProxyTest(t *testing.T, token string) string {
 
 	binDir := t.TempDir()
 	recordPath := filepath.Join(t.TempDir(), "nomad-record")
-	fakeNomad := filepath.Join(binDir, "nomad")
-	script := strings.Join([]string{
-		"#!/bin/sh",
-		"set -eu",
-		"args=",
-		"for arg do",
-		"  if [ -n \"$args\" ]; then args=\"$args|$arg\"; else args=\"$arg\"; fi",
-		"done",
-		"{",
-		"  printf 'ARGS=%s\\n' \"$args\"",
-		"  printf 'NOMAD_ADDR=%s\\n' \"${NOMAD_ADDR-}\"",
-		"  printf 'NOMAD_TOKEN=%s\\n' \"${NOMAD_TOKEN-}\"",
-		"} > \"$NOMAD_CONTEXT_TEST_RECORD\"",
+	fakeNomad := filepath.Join(binDir, "nomad-test")
+	sourcePath := filepath.Join(binDir, "main.go")
+	source := strings.Join([]string{
+		"package main",
+		"",
+		"import (",
+		`  "fmt"`,
+		`  "os"`,
+		`  "strings"`,
+		")",
+		"",
+		"func main() {",
+		`  recordPath := os.Getenv("NOMAD_CONTEXT_TEST_RECORD")`,
+		`  data := fmt.Sprintf("ARGS=%s\nNOMAD_ADDR=%s\nNOMAD_TOKEN=%s\n", strings.Join(os.Args[1:], "|"), os.Getenv("NOMAD_ADDR"), os.Getenv("NOMAD_TOKEN"))`,
+		"  if err := os.WriteFile(recordPath, []byte(data), 0o644); err != nil {",
+		"    panic(err)",
+		"  }",
+		"}",
 	}, "\n")
-	if err := os.WriteFile(fakeNomad, []byte(script), 0o755); err != nil {
-		t.Fatalf("WriteFile(fakeNomad) error = %v", err)
+	if err := os.WriteFile(sourcePath, []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile(fakeNomad source) error = %v", err)
+	}
+	build := exec.Command("go", "build", "-o", fakeNomad, sourcePath)
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build fakeNomad error = %v:\n%s", err, output)
 	}
 
 	t.Setenv(nomadBinaryEnv, fakeNomad)
