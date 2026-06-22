@@ -18,14 +18,22 @@ func NewRootCmd() *cobra.Command {
 	mgr := contexts.NewManager()
 
 	root := &cobra.Command{
-		Use:           "nomad-context",
-		Short:         "Manage Nomad CLI contexts or proxy commands to nomad",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		Args:          cobra.ArbitraryArgs,
+		Use:                "nomad-context",
+		Short:              "Manage Nomad CLI contexts or proxy commands to nomad",
+		SilenceUsage:       true,
+		SilenceErrors:      true,
+		DisableFlagParsing: true,
+		Args:               cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
+			}
+			if args[0] == "--help" || args[0] == "-h" {
+				return cmd.Help()
+			}
+			if args[0] == "--version" {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s version %s\n", cmd.Name(), cmd.Version)
+				return nil
 			}
 			return runNomad(args, mgr)
 		},
