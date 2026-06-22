@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -175,6 +176,9 @@ func setupProxyTest(t *testing.T, token string) string {
 	binDir := t.TempDir()
 	recordPath := filepath.Join(t.TempDir(), "nomad-record")
 	fakeNomad := filepath.Join(binDir, "nomad-test")
+	if runtime.GOOS == "windows" {
+		fakeNomad += ".exe"
+	}
 	sourcePath := filepath.Join(binDir, "main.go")
 	source := strings.Join([]string{
 		"package main",
