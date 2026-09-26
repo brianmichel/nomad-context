@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/zalando/go-keyring"
 
@@ -17,6 +18,8 @@ var (
 	ErrContextNotFound = errors.New("context not found")
 	ErrNoCurrent       = errors.New("no current context configured")
 	ErrTokenNotFound   = errors.New("token not found for context")
+	ErrLoginRequired   = errors.New("SSO login required for context")
+	ErrTokenExpired    = errors.New("stored Nomad token has expired")
 )
 
 type Manager struct {
@@ -46,8 +49,18 @@ func (m *Manager) List() ([]*config.Context, string, error) {
 }
 
 func (m *Manager) Upsert(name, address, token string) error {
+	return m.UpsertWithAuth(name, address, "", false, token)
+}
+
+func (m *Manager) UpsertWithAuth(name, address, authMethod string, authMethodSet bool, token string) error {
+	return m.UpsertWithOptions(name, address, "", false, authMethod, authMethodSet, token)
+}
+
+func (m *Manager) UpsertWithOptions(name, address, region string, regionSet bool, authMethod string, authMethodSet bool, token string) error {
 	name = strings.TrimSpace(name)
 	address = strings.TrimSpace(address)
+	region = strings.TrimSpace(region)
+	authMethod = strings.TrimSpace(authMethod)
 
 	if name == "" {
 		return errors.New("context name is required")
@@ -66,10 +79,27 @@ func (m *Manager) Upsert(name, address, token string) error {
 			return errors.New("address is required")
 		}
 	}
+	if exists && !authMethodSet {
+		authMethod = existing.AuthMethod
+	}
+	if exists && !regionSet {
+		region = existing.Region
+	}
+	authChanged := exists && authMethodSet && existing.AuthMethod != authMethod
+	addressChanged := exists && existing.Address != address
+	regionChanged := exists && regionSet && existing.Region != region
+	if authChanged || ((addressChanged || regionChanged) && authMethod != "") {
+		if err := m.deleteToken(name); err != nil {
+			return err
+		}
+	}
 
 	cfg.Contexts[name] = &config.Context{
-		Name:    name,
-		Address: address,
+		Name:           name,
+		Address:        address,
+		Region:         region,
+		AuthMethod:     authMethod,
+		TokenExpiresAt: existingTokenExpiry(existing, token != "" || authChanged || ((addressChanged || regionChanged) && authMethod != "")),
 	}
 
 	if cfg.Current == "" {
@@ -81,7 +111,9 @@ func (m *Manager) Upsert(name, address, token string) error {
 	}
 
 	if token != "" {
-		return m.saveToken(name, token)
+		if err := m.saveToken(name, token); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -107,7 +139,7 @@ func (m *Manager) Delete(name string) error {
 		return err
 	}
 
-	if err := keyring.Delete(m.service, name); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+	if err := m.deleteToken(name); err != nil {
 		return err
 	}
 
@@ -174,7 +206,30 @@ func (m *Manager) SaveToken(name, token string) error {
 		return errors.New("token is empty")
 	}
 
-	return m.saveToken(name, token)
+	if err := m.saveToken(name, token); err != nil {
+		return err
+	}
+	return m.saveTokenExpiry(name, "")
+}
+
+// SaveLoginToken stores an SSO-issued Nomad token and its optional expiry.
+func (m *Manager) SaveLoginToken(name, token string, expiresAt time.Time) error {
+	name = strings.TrimSpace(name)
+	token = strings.TrimSpace(token)
+	if name == "" {
+		return errors.New("context name is required for token storage")
+	}
+	if token == "" {
+		return errors.New("token is empty")
+	}
+	if err := m.saveToken(name, token); err != nil {
+		return err
+	}
+	expiry := ""
+	if !expiresAt.IsZero() {
+		expiry = expiresAt.UTC().Format(time.RFC3339Nano)
+	}
+	return m.saveTokenExpiry(name, expiry)
 }
 
 func (m *Manager) Token(name string) (string, error) {
@@ -190,6 +245,33 @@ func (m *Manager) Token(name string) (string, error) {
 
 func (m *Manager) saveToken(name, token string) error {
 	return keyring.Set(m.service, name, token)
+}
+
+func (m *Manager) deleteToken(name string) error {
+	if err := keyring.Delete(m.service, name); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) saveTokenExpiry(name, expiry string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	ctx, ok := cfg.Contexts[name]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrContextNotFound, name)
+	}
+	ctx.TokenExpiresAt = expiry
+	return config.Save(cfg)
+}
+
+func existingTokenExpiry(existing *config.Context, clear bool) string {
+	if existing == nil || clear {
+		return ""
+	}
+	return existing.TokenExpiresAt
 }
 
 func pickNewCurrent(contexts map[string]*config.Context) string {

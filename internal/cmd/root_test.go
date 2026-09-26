@@ -31,6 +31,25 @@ func TestRootProxiesUnknownFlagsToNomadSubcommands(t *testing.T) {
 	assertRecordContains(t, recorded, "NOMAD_TOKEN=dev-token")
 }
 
+func TestRootProxiesConfiguredNomadRegion(t *testing.T) {
+	recordPath := setupProxyTest(t, "dev-token")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Contexts["dev"].Region = "west"
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	root := NewRootCmd()
+	root.SetArgs([]string{"status"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	assertRecordContains(t, readRecord(t, recordPath), "NOMAD_REGION=west")
+}
+
 func TestRootProxiesUnknownFlagsAfterNestedNomadSubcommands(t *testing.T) {
 	recordPath := setupProxyTest(t, "")
 
@@ -191,7 +210,7 @@ func setupProxyTest(t *testing.T, token string) string {
 		"",
 		"func main() {",
 		`  recordPath := os.Getenv("NOMAD_CONTEXT_TEST_RECORD")`,
-		`  data := fmt.Sprintf("ARGS=%s\nNOMAD_ADDR=%s\nNOMAD_TOKEN=%s\n", strings.Join(os.Args[1:], "|"), os.Getenv("NOMAD_ADDR"), os.Getenv("NOMAD_TOKEN"))`,
+		`  data := fmt.Sprintf("ARGS=%s\nNOMAD_ADDR=%s\nNOMAD_REGION=%s\nNOMAD_TOKEN=%s\n", strings.Join(os.Args[1:], "|"), os.Getenv("NOMAD_ADDR"), os.Getenv("NOMAD_REGION"), os.Getenv("NOMAD_TOKEN"))`,
 		"  if err := os.WriteFile(recordPath, []byte(data), 0o644); err != nil {",
 		"    panic(err)",
 		"  }",

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -52,10 +53,18 @@ func runNomad(args []string, mgr *contexts.Manager) error {
 	if err != nil {
 		return err
 	}
+	if ctx.TokenExpiresAt != "" {
+		if expiresAt, parseErr := time.Parse(time.RFC3339Nano, ctx.TokenExpiresAt); parseErr == nil && !expiresAt.After(time.Now()) {
+			return fmt.Errorf("%w for context %q; run `nomad-context ctx login %s`", contexts.ErrTokenExpired, ctx.Name, ctx.Name)
+		}
+	}
 
 	token, err := mgr.Token(ctx.Name)
 	if err != nil {
 		if errors.Is(err, contexts.ErrTokenNotFound) {
+			if ctx.AuthMethod != "" {
+				return fmt.Errorf("%w: %s; run `nomad-context ctx login %s`", contexts.ErrLoginRequired, ctx.Name, ctx.Name)
+			}
 			token = ""
 		} else {
 			return err
@@ -70,6 +79,9 @@ func runNomad(args []string, mgr *contexts.Manager) error {
 	env := removeEnvVar(os.Environ(), "NOMAD_TOKEN")
 	overrides := map[string]string{
 		"NOMAD_ADDR": ctx.Address,
+	}
+	if ctx.Region != "" {
+		overrides["NOMAD_REGION"] = ctx.Region
 	}
 	if token != "" {
 		overrides["NOMAD_TOKEN"] = token
