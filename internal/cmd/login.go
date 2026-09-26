@@ -39,11 +39,7 @@ func performNomadLogin(cmd *cobra.Command, ctx *config.Context, callbackAddr str
 	child.Stdin = cmd.InOrStdin()
 	child.Stderr = cmd.ErrOrStderr()
 	env := removeEnvVar(os.Environ(), "NOMAD_TOKEN")
-	overrides := map[string]string{"NOMAD_ADDR": ctx.Address}
-	if ctx.Region != "" {
-		overrides["NOMAD_REGION"] = ctx.Region
-	}
-	child.Env = overrideEnv(env, overrides)
+	child.Env = overrideEnv(env, map[string]string{"NOMAD_ADDR": ctx.Address})
 
 	var stdout bytes.Buffer
 	child.Stdout = &stdout

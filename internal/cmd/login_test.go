@@ -20,9 +20,6 @@ import (
 
 func TestPerformNomadLoginStoresTokenAndTargetsContext(t *testing.T) {
 	manager := setupLoginManager(t)
-	if err := manager.UpsertWithOptions("dev", "", "west", true, "corp-oidc", false, ""); err != nil {
-		t.Fatal(err)
-	}
 	bin, record := buildLoginHelper(t)
 	t.Setenv(nomadBinaryEnv, bin)
 	t.Setenv("NOMAD_CONTEXT_LOGIN_JSON", `{"SecretID":"sso-secret","ExpirationTime":"2026-09-27T12:30:00Z"}`)
@@ -33,7 +30,7 @@ func TestPerformNomadLoginStoresTokenAndTargetsContext(t *testing.T) {
 	var stderr bytes.Buffer
 	cmd.SetErr(&stderr)
 	expiresAt, err := performNomadLogin(cmd, &config.Context{
-		Name: "dev", Address: "https://dev.nomad.local:4646", Region: "west", AuthMethod: "corp-oidc",
+		Name: "dev", Address: "https://dev.nomad.local:4646", AuthMethod: "corp-oidc",
 	}, "127.0.0.1:4650", manager)
 	if err != nil {
 		t.Fatalf("performNomadLogin() error = %v", err)
@@ -59,7 +56,6 @@ func TestPerformNomadLoginStoresTokenAndTargetsContext(t *testing.T) {
 	for _, want := range []string{
 		"ARGS=login|-json|-method=corp-oidc|-oidc-callback-addr=127.0.0.1:4650",
 		"NOMAD_ADDR=https://dev.nomad.local:4646",
-		"NOMAD_REGION=west",
 		"NOMAD_TOKEN=",
 	} {
 		if !strings.Contains(string(recorded), want) {
@@ -154,11 +150,11 @@ func TestCtxLoginCommandRunsConfiguredNomadLogin(t *testing.T) {
 	}
 }
 
-func TestCtxSetCommandPersistsSSOSettingsAndRegion(t *testing.T) {
+func TestCtxSetCommandPersistsSSOSettings(t *testing.T) {
 	t.Setenv("NOMAD_CONTEXT_HOME", t.TempDir())
 	keyring.MockInit()
 	root := NewRootCmd()
-	root.SetArgs([]string{"ctx", "set", "corp", "--addr", "https://corp", "--region", "west", "--auth-method", "corp-oidc"})
+	root.SetArgs([]string{"ctx", "set", "corp", "--addr", "https://corp", "--auth-method", "corp-oidc"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -166,7 +162,7 @@ func TestCtxSetCommandPersistsSSOSettingsAndRegion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ctx.Address != "https://corp" || ctx.Region != "west" || ctx.AuthMethod != "corp-oidc" {
+	if ctx.Address != "https://corp" || ctx.AuthMethod != "corp-oidc" {
 		t.Fatalf("unexpected saved context: %+v", ctx)
 	}
 }
@@ -224,7 +220,7 @@ import (
   "strings"
 )
 func main() {
-  record := fmt.Sprintf("ARGS=%s\nNOMAD_ADDR=%s\nNOMAD_REGION=%s\nNOMAD_TOKEN=%s\n", strings.Join(os.Args[1:], "|"), os.Getenv("NOMAD_ADDR"), os.Getenv("NOMAD_REGION"), os.Getenv("NOMAD_TOKEN"))
+	  record := fmt.Sprintf("ARGS=%s\nNOMAD_ADDR=%s\nNOMAD_TOKEN=%s\n", strings.Join(os.Args[1:], "|"), os.Getenv("NOMAD_ADDR"), os.Getenv("NOMAD_TOKEN"))
   if err := os.WriteFile(os.Getenv("NOMAD_CONTEXT_LOGIN_RECORD"), []byte(record), 0600); err != nil { panic(err) }
   fmt.Print(os.Getenv("NOMAD_CONTEXT_LOGIN_JSON"))
   if exit := os.Getenv("NOMAD_CONTEXT_LOGIN_EXIT"); exit != "" { code := 1; fmt.Sscanf(exit, "%d", &code); os.Exit(code) }

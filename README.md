@@ -19,7 +19,7 @@ Every time you work on the project, either launch your shell through `mise shell
 nomad-context ctx set dev --addr https://nomad.dev.internal:4646 --prompt-token
 
 # Configure an SSO context and log in through the configured Nomad auth method
-nomad-context ctx set corp --addr https://nomad.corp.internal:4646 --region global --auth-method corp-oidc
+nomad-context ctx set corp --addr https://nomad.corp.internal:4646 --auth-method corp-oidc
 nomad-context ctx login corp
 
 # Switch between contexts
@@ -38,7 +38,7 @@ nomad-context job run example.nomad
 
 The `--auth-method` value is the ACL auth-method name configured by the Nomad cluster administrator. `ctx login` runs `nomad login -json` against that context, and opens the provider's browser flow when required. The optional `--oidc-callback-addr` flag can be passed to `ctx login` if the default callback address is unavailable; the address must also be allowed in the Nomad auth-method and identity-provider configuration. Nomad's CLI login flow requires a compatible Nomad CLI (the login command is documented for Nomad 1.8 and later).
 
-Manually supplied and SSO-issued Nomad ACL tokens are stored securely via the platform keyring using `github.com/zalando/go-keyring`. Context metadata—including address, optional region, auth method, and known token expiry—lives in `~/.config/nomad-context/config.json` (override with `NOMAD_CONTEXT_HOME`). Tokens are never written to that config file. When an SSO token is known to have expired, proxied commands stop and ask you to run `nomad-context ctx login <name>` again; login is not started unexpectedly during a regular Nomad command.
+Manually supplied and SSO-issued Nomad ACL tokens are stored securely via the platform keyring using `github.com/zalando/go-keyring`. Context metadata—including address, auth method, and known token expiry—lives in `~/.config/nomad-context/config.json` (override with `NOMAD_CONTEXT_HOME`). Tokens are never written to that config file. Nomad connection settings such as `NOMAD_REGION` continue to be read from the environment. When an SSO token is known to have expired, proxied commands stop and ask you to run `nomad-context ctx login <name>` again; login is not started unexpectedly during a regular Nomad command.
 
 Set the `NOMAD_CONTEXT_NOMAD_PATH` environment variable if `nomad` is not on your `PATH`.
 

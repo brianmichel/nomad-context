@@ -151,7 +151,6 @@ func shouldUseColor(out io.Writer) bool {
 
 func newCtxSetCommand(mgr *contexts.Manager) *cobra.Command {
 	var addr string
-	var region string
 	var token string
 	var promptToken bool
 	var authMethod string
@@ -201,7 +200,7 @@ func newCtxSetCommand(mgr *contexts.Manager) *cobra.Command {
 				tokenArg = tokenValue
 			}
 
-			if err := mgr.UpsertWithOptions(name, targetAddr, region, cmd.Flags().Changed("region"), authMethod, cmd.Flags().Changed("auth-method"), tokenArg); err != nil {
+			if err := mgr.UpsertWithAuth(name, targetAddr, authMethod, cmd.Flags().Changed("auth-method"), tokenArg); err != nil {
 				return err
 			}
 
@@ -211,7 +210,6 @@ func newCtxSetCommand(mgr *contexts.Manager) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&addr, "addr", "", "Nomad server address, e.g. https://nomad.service:4646")
-	cmd.Flags().StringVar(&region, "region", "", "Nomad region for this context")
 	cmd.Flags().StringVar(&token, "token", "", "Nomad ACL token to store securely")
 	cmd.Flags().BoolVar(&promptToken, "prompt-token", false, "Interactively prompt for the token (useful for rotation)")
 	cmd.Flags().StringVar(&authMethod, "auth-method", "", "Nomad ACL auth-method name for SSO login")

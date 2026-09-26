@@ -80,9 +80,6 @@ func runNomad(args []string, mgr *contexts.Manager) error {
 	overrides := map[string]string{
 		"NOMAD_ADDR": ctx.Address,
 	}
-	if ctx.Region != "" {
-		overrides["NOMAD_REGION"] = ctx.Region
-	}
 	if token != "" {
 		overrides["NOMAD_TOKEN"] = token
 	}

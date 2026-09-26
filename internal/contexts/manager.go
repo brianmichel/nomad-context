@@ -53,13 +53,8 @@ func (m *Manager) Upsert(name, address, token string) error {
 }
 
 func (m *Manager) UpsertWithAuth(name, address, authMethod string, authMethodSet bool, token string) error {
-	return m.UpsertWithOptions(name, address, "", false, authMethod, authMethodSet, token)
-}
-
-func (m *Manager) UpsertWithOptions(name, address, region string, regionSet bool, authMethod string, authMethodSet bool, token string) error {
 	name = strings.TrimSpace(name)
 	address = strings.TrimSpace(address)
-	region = strings.TrimSpace(region)
 	authMethod = strings.TrimSpace(authMethod)
 
 	if name == "" {
@@ -82,13 +77,9 @@ func (m *Manager) UpsertWithOptions(name, address, region string, regionSet bool
 	if exists && !authMethodSet {
 		authMethod = existing.AuthMethod
 	}
-	if exists && !regionSet {
-		region = existing.Region
-	}
 	authChanged := exists && authMethodSet && existing.AuthMethod != authMethod
 	addressChanged := exists && existing.Address != address
-	regionChanged := exists && regionSet && existing.Region != region
-	if authChanged || ((addressChanged || regionChanged) && authMethod != "") {
+	if authChanged || (addressChanged && authMethod != "") {
 		if err := m.deleteToken(name); err != nil {
 			return err
 		}
@@ -97,9 +88,8 @@ func (m *Manager) UpsertWithOptions(name, address, region string, regionSet bool
 	cfg.Contexts[name] = &config.Context{
 		Name:           name,
 		Address:        address,
-		Region:         region,
 		AuthMethod:     authMethod,
-		TokenExpiresAt: existingTokenExpiry(existing, token != "" || authChanged || ((addressChanged || regionChanged) && authMethod != "")),
+		TokenExpiresAt: existingTokenExpiry(existing, token != "" || authChanged || (addressChanged && authMethod != "")),
 	}
 
 	if cfg.Current == "" {

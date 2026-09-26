@@ -15,7 +15,6 @@ const (
 type Context struct {
 	Name           string `json:"name"`
 	Address        string `json:"address"`
-	Region         string `json:"region,omitempty"`
 	AuthMethod     string `json:"auth_method,omitempty"`
 	TokenExpiresAt string `json:"token_expires_at,omitempty"`
 }
