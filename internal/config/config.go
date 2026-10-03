@@ -13,8 +13,10 @@ const (
 )
 
 type Context struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
+	Name           string `json:"name"`
+	Address        string `json:"address"`
+	AuthMethod     string `json:"auth_method,omitempty"`
+	TokenExpiresAt string `json:"token_expires_at,omitempty"`
 }
 
 type Config struct {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jedib0t/go-pretty/v6/list"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -29,6 +30,7 @@ func newCtxCommand(mgr *contexts.Manager) *cobra.Command {
 	ctxCmd.AddCommand(
 		newCtxListCommand(mgr),
 		newCtxSetCommand(mgr),
+		newCtxLoginCommand(mgr),
 		newCtxUseCommand(mgr),
 		newCtxDeleteCommand(mgr),
 		newCtxShowCommand(mgr),
@@ -98,7 +100,20 @@ func renderContextDetails(out io.Writer, ctx *config.Context, hasToken bool) {
 	listWriter.AppendItem(fmt.Sprintf("Context %q", ctx.Name))
 	listWriter.Indent()
 	listWriter.AppendItem(fmt.Sprintf("Address: %s", ctx.Address))
-	listWriter.AppendItem(fmt.Sprintf("Token stored: %s", formatTokenPresence(hasToken, shouldUseColor(out))))
+	authType := "static token"
+	if ctx.AuthMethod != "" {
+		authType = fmt.Sprintf("Nomad login (%s)", ctx.AuthMethod)
+	}
+	listWriter.AppendItem(fmt.Sprintf("Authentication: %s", authType))
+	if hasToken && ctx.TokenExpiresAt != "" {
+		if expiry, err := time.Parse(time.RFC3339Nano, ctx.TokenExpiresAt); err == nil && !expiry.After(time.Now()) {
+			listWriter.AppendItem("Token status: expired")
+		} else {
+			listWriter.AppendItem(fmt.Sprintf("Token expires: %s", ctx.TokenExpiresAt))
+		}
+	} else {
+		listWriter.AppendItem(fmt.Sprintf("Token stored: %s", formatTokenPresence(hasToken, shouldUseColor(out))))
+	}
 	listWriter.UnIndentAll()
 
 	listWriter.Render()
@@ -138,6 +153,7 @@ func newCtxSetCommand(mgr *contexts.Manager) *cobra.Command {
 	var addr string
 	var token string
 	var promptToken bool
+	var authMethod string
 
 	cmd := &cobra.Command{
 		Use:   "set <name>",
@@ -184,7 +200,7 @@ func newCtxSetCommand(mgr *contexts.Manager) *cobra.Command {
 				tokenArg = tokenValue
 			}
 
-			if err := mgr.Upsert(name, targetAddr, tokenArg); err != nil {
+			if err := mgr.UpsertWithAuth(name, targetAddr, authMethod, cmd.Flags().Changed("auth-method"), tokenArg); err != nil {
 				return err
 			}
 
@@ -196,6 +212,37 @@ func newCtxSetCommand(mgr *contexts.Manager) *cobra.Command {
 	cmd.Flags().StringVar(&addr, "addr", "", "Nomad server address, e.g. https://nomad.service:4646")
 	cmd.Flags().StringVar(&token, "token", "", "Nomad ACL token to store securely")
 	cmd.Flags().BoolVar(&promptToken, "prompt-token", false, "Interactively prompt for the token (useful for rotation)")
+	cmd.Flags().StringVar(&authMethod, "auth-method", "", "Nomad ACL auth-method name for SSO login")
+	return cmd
+}
+
+func newCtxLoginCommand(mgr *contexts.Manager) *cobra.Command {
+	var callbackAddr string
+	cmd := &cobra.Command{
+		Use:   "login <name>",
+		Short: "Log in to a Nomad context using its configured auth method",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, err := mgr.Resolve(args[0])
+			if err != nil {
+				return err
+			}
+			if ctx.AuthMethod == "" {
+				return errors.New("context has no SSO auth method configured; set it with --auth-method")
+			}
+			expiresAt, err := performNomadLogin(cmd, ctx, callbackAddr, mgr)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Logged in to context %q", ctx.Name)
+			if !expiresAt.IsZero() {
+				fmt.Fprintf(cmd.OutOrStdout(), " (token expires %s)", expiresAt.Format(time.RFC3339))
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), ".")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&callbackAddr, "oidc-callback-addr", "", "Local OIDC callback address (must be allowed by the Nomad auth method)")
 	return cmd
 }
 
