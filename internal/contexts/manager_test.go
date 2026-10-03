@@ -167,6 +167,43 @@ func TestManagerChangingAuthMethodClearsOldToken(t *testing.T) {
 	}
 }
 
+func TestManagerUpsertRestoresTokenWhenConfigSaveFails(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := mgr.UpsertWithAuth("dev", "https://dev", "first-method", true, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := mgr.SaveLoginToken("dev", "old-secret", time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	path, err := config.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(path, 0o600); err != nil {
+			t.Errorf("restore config file permissions: %v", err)
+		}
+	})
+
+	if err := mgr.UpsertWithAuth("dev", "https://dev", "second-method", true, ""); err == nil {
+		t.Fatal("UpsertWithAuth() succeeded with a read-only config directory")
+	}
+	if token, err := mgr.Token("dev"); err != nil || token != "old-secret" {
+		t.Fatalf("Token() = %q, %v; want restored old-secret", token, err)
+	}
+	ctx, err := mgr.Resolve("dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ctx.AuthMethod != "first-method" {
+		t.Fatalf("failed update changed auth method to %q", ctx.AuthMethod)
+	}
+}
+
 func TestManagerLegacyConfigLoadsWithoutAuthFields(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("NOMAD_CONTEXT_HOME", dir)

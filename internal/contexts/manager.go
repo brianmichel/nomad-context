@@ -79,7 +79,14 @@ func (m *Manager) UpsertWithAuth(name, address, authMethod string, authMethodSet
 	}
 	authChanged := exists && authMethodSet && existing.AuthMethod != authMethod
 	addressChanged := exists && existing.Address != address
-	if authChanged || (addressChanged && authMethod != "") {
+	clearToken := authChanged || (addressChanged && authMethod != "")
+	var oldToken string
+	if clearToken {
+		var err error
+		oldToken, err = m.Token(name)
+		if err != nil && !errors.Is(err, ErrTokenNotFound) {
+			return err
+		}
 		if err := m.deleteToken(name); err != nil {
 			return err
 		}
@@ -97,6 +104,11 @@ func (m *Manager) UpsertWithAuth(name, address, authMethod string, authMethodSet
 	}
 
 	if err := config.Save(cfg); err != nil {
+		if oldToken != "" {
+			if restoreErr := m.saveToken(name, oldToken); restoreErr != nil {
+				return errors.Join(err, fmt.Errorf("restore existing token: %w", restoreErr))
+			}
+		}
 		return err
 	}
 
